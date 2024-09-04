@@ -7,6 +7,9 @@ jobs:
   Test:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
@@ -67,4 +70,3 @@ jobs:
             -t cube8021/etcdctl-go-decrypt:${{ github.sha }} \
             --push \
             -f Dockerfile .
-
