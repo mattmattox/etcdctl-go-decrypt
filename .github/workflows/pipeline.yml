@@ -1,0 +1,70 @@
+name: Docker Build and Push
+
+on:
+  [workflow_dispatch, push]
+
+jobs:
+  Test:
+    runs-on: self-hosted-runner
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Install static analysis tools
+        run: |
+          go install golang.org/x/lint/golint@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Install dependency management tools
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install github.com/psampaz/go-mod-outdated@latest
+        
+      - name: Go static analysis
+        run: |
+          golint ./...
+          staticcheck ./...
+          go vet ./...
+
+      - name: Dependency management
+        run: |
+          go mod vendor
+          go mod verify
+          go mod tidy
+
+      - name: Security scanning
+        run: |
+          gosec ./...
+
+  Build:
+    runs-on: self-hosted-runner
+    needs: Test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Docker build and push
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --pull \
+            --cache-from cube8021/etcdctl-go-decrypt:latest \
+            --cache-to type=registry,ref=cube8021/etcdctl-go-decrypt:cache,mode=max \
+            -t cube8021/etcdctl-go-decrypt:v${{ github.run_number }} \
+            -t cube8021/etcdctl-go-decrypt:latest \
+            -t cube8021/etcdctl-go-decrypt:${{ github.sha }} \
+            --push \
+            -f Dockerfile .
+
